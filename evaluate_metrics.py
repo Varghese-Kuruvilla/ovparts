@@ -127,40 +127,48 @@ def main():
         
         hist += fast_hist(gt_canonical.flatten(), pred_canonical.flatten(), num_classes)
 
-    # Compute Metrics
-    # acc = np.diag(hist).sum() / hist.sum()
-    acc_cls = np.diag(hist) / hist.sum(axis=1)
-    acc_cls = np.nanmean(acc_cls)
-    
-    iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
-    mean_iu = np.nanmean(iu)
-    
-    # Frequency Weighted IoU
-    freq = hist.sum(axis=1) / hist.sum()
-    fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
+    # Compute Metrics (matching GeneralizedSemSegEvaluator)
+    acc = np.full(num_classes, np.nan, dtype=np.float64)
+    iou = np.full(num_classes, np.nan, dtype=np.float64)
+    tp = np.diag(hist).astype(np.float64)
+    # hist[gt, pred]: sum over pred axis gives GT pixel counts per class
+    pos_gt = hist.sum(axis=1).astype(np.float64)
+    class_weights = pos_gt / np.sum(pos_gt)
+    # hist[gt, pred]: sum over gt axis gives Pred pixel counts per class
+    pos_pred = hist.sum(axis=0).astype(np.float64)
+    acc_valid = pos_gt > 0
+    acc[acc_valid] = tp[acc_valid] / pos_gt[acc_valid]
+    iou_valid = (pos_gt + pos_pred) > 0
+    union = pos_gt + pos_pred - tp
+    iou[acc_valid] = tp[acc_valid] / union[acc_valid]
+    macc = np.sum(acc[acc_valid]) / np.sum(acc_valid)
+    miou = np.sum(iou[acc_valid]) / np.sum(iou_valid)
+    fiou = np.sum(iou[acc_valid] * class_weights[acc_valid])
+    pacc = np.sum(tp) / np.sum(pos_gt)
 
     # Pretty Print
     print(f"{'Class':<20} {'IoU':<10} {'Acc':<10}")
     print("-" * 40)
     for i, label in enumerate(sorted_labels):
-        iou_val = iu[i] * 100
-        acc_val = (np.diag(hist)[i] / hist.sum(axis=1)[i] * 100) if hist.sum(axis=1)[i] > 0 else float('nan')
-        print(f"{label:<20} {iou_val:<10.2f} {acc_val:<10.2f}")
+        print(f"{label:<20} {100 * iou[i]:<10.2f} {100 * acc[i]:<10.2f}")
     print("-" * 40)
-    print(f"mIoU: {mean_iu*100:.2f}")
-    print(f"fwIoU: {fwavacc*100:.2f}")
-    print(f"mAcc: {acc_cls*100:.2f}")
+    print(f"mIoU: {100 * miou:.2f}")
+    print(f"fwIoU: {100 * fiou:.2f}")
+    print(f"mAcc: {100 * macc:.2f}")
+    print(f"pAcc: {100 * pacc:.2f}")
 
     if args.output_file:
-        results = {
-            "mIoU": mean_iu,
-            "fwIoU": fwavacc,
-            "mAcc": acc_cls,
-            "class_IoU": {label: iu[i] for i, label in enumerate(sorted_labels)},
-            "confusion_matrix": hist.tolist()
-        }
+        res = {}
+        res["mIoU"] = 100 * miou
+        res["fwIoU"] = 100 * fiou
+        for i, name in enumerate(sorted_labels):
+            res["IoU-{}".format(name)] = 100 * iou[i]
+        res["mAcc"] = 100 * macc
+        res["pAcc"] = 100 * pacc
+        for i, name in enumerate(sorted_labels):
+            res["Acc-{}".format(name)] = 100 * acc[i]
         with open(args.output_file, 'w') as f:
-            json.dump(results, f, indent=4)
+            json.dump(res, f, indent=4)
         print(f"Results saved to {args.output_file}")
 
 if __name__ == "__main__":
