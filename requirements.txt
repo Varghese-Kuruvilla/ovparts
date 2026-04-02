@@ -10,4 +10,4 @@ torch==1.12.1+cu113
 torchvision==0.13.1
 tokenizers==0.11.1
 Pillow~=9.5
-detectron2 #Following https://detectron2.readthedocs.io/en/latest/tutorials/install.html
+# detectron2 #Following https://detectron2.readthedocs.io/en/latest/tutorials/install.html

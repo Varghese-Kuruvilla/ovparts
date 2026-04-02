@@ -4,10 +4,10 @@ import os
 from tqdm import tqdm
 
 def main():
-    input_jsonl = '/archive/varghese/part_edit/data/ov_parts/PascalPart116/test.jsonl'
+    input_jsonl = '/archive/varghese/part_edit/data/ov_parts/PascalPart116/seg_model/pascal_parts_116_val.jsonl'
     # Base directory for the newly created visualizations
-    viz_dir = '/archive/varghese/part_edit/data/ov_parts/PascalPart116/visualizations_test'
-    output_jsonl = '/archive/varghese/part_edit/data/ov_parts/PascalPart116/captioned_test.jsonl'
+    viz_dir = '/archive/varghese/part_edit/data/ov_parts/PascalPart116/seg_model/visualizations_val_seen'
+    output_jsonl = '/archive/varghese/part_edit/data/ov_parts/PascalPart116/seg_model/captioned_val_seen.jsonl'
     
     print(f"Reading from {input_jsonl}")
     print(f"Writing to {output_jsonl}")

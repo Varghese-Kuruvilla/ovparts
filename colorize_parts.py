@@ -54,13 +54,13 @@ def colorize_mask(mask_path, parts, output_path):
     Image.fromarray(color_mask).save(output_path)
 
 def main():
-    jsonl_path = '/archive/varghese/part_edit/data/ov_parts/PascalPart116/test.jsonl'
+    jsonl_path = '/archive/varghese/part_edit/data/ov_parts/PascalPart116/seg_model/pascal_parts_116_val.jsonl'
     
     # Create visualizations directory parallel to the annotations directory if possible,
     # or just a specific folder as requested. Since none requested, I'll create 'visualizations'
     # relative to the jsonl file location.
     base_dir = os.path.dirname(jsonl_path)
-    output_dir = os.path.join(base_dir, 'visualizations_test')
+    output_dir = os.path.join(base_dir, 'visualizations_val_seen')
     os.makedirs(output_dir, exist_ok=True)
     
     print(f"Reading from {jsonl_path}")
