@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 
 JSONL_ROOT = "/archive/varghese/part_edit/data/ov_parts/ADE20KPart234/ADE20KPart234"
+NOVEL_CLASSES = ['bench', 'bus', 'fan', 'desk', 'stool', 'truck', 'van', 'swivel chair', 'oven', 'ottoman', 'kitchen island']
 
 # Use the same class names from the registration logic for consistent object legend
 OBJ_CLASS_NAMES = ['airplane', 'armchair', 'bed', 'bench', 'bookcase', 'bus', 'cabinet', 'car', 'chair', 'chandelier', 'chest of drawers', 'clock', 'coffee table', 'computer', 'cooking stove', 'desk', 'dishwasher', 'door', 
@@ -39,7 +40,7 @@ def colorize_mask(mask, colors):
     clamped_mask = np.where(mask < max_idx, mask, max_idx)
     return colors[clamped_mask]
 
-def create_color_legend_html(label_dict, colors):
+def create_color_legend_html(label_dict, colors, highlight_list=None):
     """Creates an HTML legend with color boxes."""
     html = "<div style='line-height: 1.5; font-size: 0.9em;'>"
     max_idx = len(colors) - 1
@@ -49,9 +50,16 @@ def create_color_legend_html(label_dict, colors):
         idx = val if val < max_idx else max_idx
         c = colors[idx]
         color_hex = '#{:02x}{:02x}{:02x}'.format(c[0], c[1], c[2])
+        
+        is_highlighted = highlight_list and any(h in name for h in highlight_list)
+        style = "font-weight: bold; color: #ffeb3b; padding: 2px 4px; background-color: #333; border-radius: 4px;" if is_highlighted else ""
+        label_text = f"ID {val}: {name}"
+        if is_highlighted:
+            label_text += " [NOVEL]"
+            
         html += f"<div style='display: flex; align-items: center; margin-bottom: 4px;'>"
         html += f"<div style='width: 15px; height: 15px; background-color: {color_hex}; margin-right: 8px; border: 1px solid #555;'></div>"
-        html += f"<span>ID {val}: {name}</span></div>"
+        html += f"<span style='{style}'>{label_text}</span></div>"
     html += "</div>"
     return html
 
@@ -67,8 +75,29 @@ def main():
         
     selected_jsonl = st.sidebar.selectbox("Select split", jsonl_files)
     items = load_jsonl(os.path.join(JSONL_ROOT, selected_jsonl))
-    st.sidebar.info(f"Total entries: {len(items)}")
     
+    # Novel Class Filter
+    show_only_novel_parts = st.sidebar.checkbox("Show only entries with novel parts", value=False)
+    
+    if show_only_novel_parts:
+        filtered_items = []
+        for item in items:
+            has_novel_part = False
+            for pname in item['parts'].values():
+                if any(nc in pname for nc in NOVEL_CLASSES):
+                    has_novel_part = True
+                    break
+            if has_novel_part:
+                filtered_items.append(item)
+        items = filtered_items
+        st.sidebar.warning(f"Filtered: {len(items)} entries")
+    else:
+        st.sidebar.info(f"Total entries: {len(items)}")
+    
+    if not items:
+        st.error("No entries match the current filter.")
+        return
+
     idx = st.sidebar.number_input("Image Index", 0, len(items)-1, 0)
     item = items[idx]
     
@@ -91,13 +120,41 @@ def main():
             cid = OBJ_CLASS_NAMES.index(cname)
             obj_legend_dict[str(cid + 1)] = cname
     
-    st.sidebar.markdown(create_color_legend_html(obj_legend_dict, colors), unsafe_allow_html=True)
+    st.sidebar.markdown(create_color_legend_html(obj_legend_dict, colors, highlight_list=NOVEL_CLASSES), unsafe_allow_html=True)
     
     st.sidebar.divider()
 
     # Parts Legend
     st.sidebar.write("### 🧩 Parts Legend")
-    st.sidebar.markdown(create_color_legend_html(item['parts'], colors), unsafe_allow_html=True)
+    st.sidebar.markdown(create_color_legend_html(item['parts'], colors, highlight_list=NOVEL_CLASSES), unsafe_allow_html=True)
+
+    # Interactive Part Highlighting
+    st.sidebar.divider()
+    st.sidebar.write("### ✨ Highlight Parts")
+    
+    # Reset selection if image changes
+    if 'current_idx' not in st.session_state or st.session_state.current_idx != idx:
+        st.session_state.current_idx = idx
+        st.session_state.part_selection = []
+
+    # Sort options by ID for better navigation
+    sorted_parts = sorted(item['parts'].items(), key=lambda x: int(x[0]))
+    part_options = {f"ID {k}: {v}": int(k) for k, v in sorted_parts}
+    
+    # Suggested selection: Novel parts
+    suggested_novel = [opt for opt, pid in part_options.items() if any(nc in item['parts'][str(pid)] for nc in NOVEL_CLASSES)]
+    
+    selected_part_names = st.sidebar.multiselect(
+        "Select parts to isolate",
+        options=list(part_options.keys()),
+        key="part_selection"
+    )
+    
+    highlight_ids = [part_options[name] for name in selected_part_names]
+    
+    if st.sidebar.button("Select All Novel Parts"):
+        st.session_state.part_selection = suggested_novel
+        st.rerun()
 
     # Main Display
     img = Image.open(item['image_path'])
@@ -111,6 +168,14 @@ def main():
         
     part_mask = np.array(Image.open(item['part_map_path']))
     part_img_colored = colorize_mask(part_mask, colors)
+    
+    # Apply Highlight
+    if highlight_ids:
+        # Create a dimming mask: True for pixels NOT in highlight_ids
+        # We also want to keep background/ignore if desired, but isolating usually means everything else is dimmed
+        dim_mask = ~np.isin(part_mask, highlight_ids)
+        # Dim unselected parts (multiply by 0.2 to fade out)
+        part_img_colored[dim_mask] = (part_img_colored[dim_mask].astype(np.float32) * 0.15).astype(np.uint8)
 
     # Columns
     col1, col2, col3 = st.columns(3)
