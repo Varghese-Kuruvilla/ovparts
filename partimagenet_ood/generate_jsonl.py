@@ -82,7 +82,9 @@ def create_jsonl(split, target_synsets, output_filename):
             # Use original category names from the dataset (e.g., 'Quadruped Head')
             for i, ann in enumerate(anns):
                 cat_info = categories.get(ann['category_id'], {"name": "part"})
-                part_name = cat_info['name'].lower()
+                # Strip the first word (supercategory) from the part name
+                # e.g., "Quadruped Head" -> "head", "Car Side Mirror" -> "side mirror"
+                part_name = " ".join(cat_info['name'].split()[1:]).lower()
                 # Use cat_id + 1 as key, matching PNG pixel values
                 parts_dict[str(ann['category_id'] + 1)] = f"{part_name} of a {obj_name}"
             
